@@ -62,13 +62,64 @@ public class UserOperations {
             }
         }
     }
+public User getUserProfileById(int empId) {
+        User userProfile = null;
+        Connection connection = null;
+        PreparedStatement statement = null;
+        ResultSet resultSet = null;
 
+        try {
+            connection = DBConnection.getConnection();
+
+            // Query to retrieve user details and leave balance based on empid
+            String query = "SELECT u.id AS userId, u.username, u.role,e.leave_balance, e.location, e.name, e.dateofjoin "
+                         + "FROM user u "
+                         + "JOIN emp e ON u.id = e.id "
+                         + "WHERE u.id = ?";
+            statement = connection.prepareStatement(query);
+            statement.setInt(1, empId);
+
+            resultSet = statement.executeQuery();
+
+            if (resultSet.next()) {
+                // Retrieve user details and leave balance from the result set
+                int userId = resultSet.getInt("userId");
+                String username = resultSet.getString("username");
+                String role = resultSet.getString("role");
+                String name = resultSet.getString("name");
+                int leaveBalance = resultSet.getInt("leave_balance");
+
+                // Create a UserProfile object with the retrieved details
+                userProfile = new User(username, name, empId,role, leaveBalance, resultSet.getDate("dateofjoin"), resultSet.getString("location"));
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace(); // Handle or log the exception as needed
+        } finally {
+            try {
+                if (resultSet != null) {
+                    resultSet.close();
+                }
+                if (statement != null) {
+                    statement.close();
+                }
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return userProfile;
+    }
+    
   public ArrayList<User> getAllUsers() {
         ArrayList<User> userList = new ArrayList<>();
         try {
             con = DBConnection.getConnection();
 
-            String query = "SELECT u.id, u.username, u.role, e.name, e.dateofjoin, e.leave_balance " +
+            String query = "SELECT u.id, u.username, u.role, e.name, e.dateofjoin, e.location, e.leave_balance " +
                            "FROM user u LEFT JOIN emp e ON u.id = e.id";
             try (PreparedStatement pst = con.prepareStatement(query);
                  ResultSet rs = pst.executeQuery()) {
@@ -80,7 +131,7 @@ public class UserOperations {
                     Date dateOfJoin = rs.getDate("dateofjoin");
                     int leaveBalance = rs.getInt("leave_balance");
 
-                    User user = new User(username, name, id, role, leaveBalance, dateOfJoin);
+                    User user = new User(username, name, id, role, leaveBalance, dateOfJoin, rs.getString("location"));
                     userList.add(user);
                 }
             }
@@ -173,12 +224,13 @@ empPst.setDate(4, new java.sql.Date(user.getJoin().getTime()));
             int userRowsAffected = updateUserPst.executeUpdate();
             if (userRowsAffected > 0) {
                 // Update the emp table
-                String updateEmpQuery = "UPDATE emp SET name = ?, leave_balance = ?, dateofjoin = ? WHERE id = ?";
+                String updateEmpQuery = "UPDATE emp SET name = ?, leave_balance = ?, dateofjoin = ?, location = ? WHERE id = ?";
                 try (PreparedStatement updateEmpPst = con.prepareStatement(updateEmpQuery)) {
                     updateEmpPst.setString(1, updatedUser.getName());
                     updateEmpPst.setInt(2, updatedUser.getLeave());
                     updateEmpPst.setDate(3, new java.sql.Date(updatedUser.getJoin().getTime()));
-                    updateEmpPst.setInt(4, id);
+                    updateEmpPst.setString(4, updatedUser.getLocation());
+                    updateEmpPst.setInt(5, id);
 
                     // Execute the query
                     int empRowsAffected = updateEmpPst.executeUpdate();
@@ -201,5 +253,45 @@ empPst.setDate(4, new java.sql.Date(user.getJoin().getTime()));
 
     return success;
 }
+   
+   public boolean updateEmployeeDetails(int empId, String newName, String newUsername, String newPassword) {
+        Connection connection = null;
+        PreparedStatement statement = null;
+
+        try {
+            connection = DBConnection.getConnection();
+
+            // Update the name, username, and password for the given empid
+            String updateQuery = "UPDATE user u "
+                               + "JOIN emp e ON u.id = e.id "
+                               + "SET u.username = ?, u.password = md5(?), e.name = ? "
+                               + "WHERE u.id = ?";
+            statement = connection.prepareStatement(updateQuery);
+            statement.setString(1, newUsername);
+            statement.setString(2, newPassword);
+            statement.setString(3, newName);
+            statement.setInt(4, empId);
+
+            int rowsUpdated = statement.executeUpdate();
+
+            return rowsUpdated > 0;
+
+        } catch (SQLException e) {
+            e.printStackTrace(); // Handle or log the exception as needed
+        } finally {
+            try {
+                if (statement != null) {
+                    statement.close();
+                }
+                if (connection != null) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return false; // Update failed
+    }
 
 }
